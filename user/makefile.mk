@@ -6,6 +6,9 @@ USER_PROGS := \
 	forktest\
 	grep\
 	hello\
+	rctest\
+	test_1\
+	test_2\
 	init\
 	kill\
 	ln\
