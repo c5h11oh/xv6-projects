@@ -52,7 +52,7 @@ trap(struct trapframe *tf)
       wakeup(&ticks);
       release(&tickslock);
     }
-    lapiceoi();
+    lapiceoi(); // lapic end of interrupt
     break;
   case T_IRQ0 + IRQ_IDE:
     ideintr();

@@ -5,6 +5,9 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "pstat.h"
+
+#define SEED 23576
 
 struct {
   struct spinlock lock;
@@ -97,6 +100,8 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  p->ticket = 0;
+  p->tick = 0;
   p->state = RUNNABLE;
   release(&ptable.lock);
 }
@@ -148,6 +153,10 @@ fork(void)
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
+  // Copy the amount of ticket and initialize tick
+  np->ticket = proc->ticket;
+  np->tick = 0;
+
   for(i = 0; i < NOFILE; i++)
     if(proc->ofile[i])
       np->ofile[i] = filedup(proc->ofile[i]);
@@ -195,6 +204,9 @@ exit(void)
         wakeup1(initproc);
     }
   }
+
+  // Clear ticks and ticket
+  proc->tick = proc->ticket = 0;
 
   // Jump into the scheduler, never to return.
   proc->state = ZOMBIE;
@@ -245,6 +257,23 @@ wait(void)
   }
 }
 
+// Seed for the random number generator below
+static unsigned int z1 = SEED, z2 = SEED, z3 = SEED, z4 = SEED;
+// Random number generator used by scheduler
+unsigned int randnum(unsigned int largestNum)
+{
+   unsigned int b;
+   b  = ((z1 << 6) ^ z1) >> 13;
+   z1 = ((z1 & 4294967294UL) << 18) ^ b;
+   b  = ((z2 << 2) ^ z2) >> 27; 
+   z2 = ((z2 & 4294967288UL) << 2) ^ b;
+   b  = ((z3 << 13) ^ z3) >> 21;
+   z3 = ((z3 & 4294967280UL) << 7) ^ b;
+   b  = ((z4 << 3) ^ z4) >> 12;
+   z4 = ((z4 & 4294967168UL) << 13) ^ b;
+   return (z1 ^ z2 ^ z3 ^ z4) % largestNum + 1;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -263,15 +292,41 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    
+    // get total tickets
+    int totalTicket = 0;
+    for(int i=1; i<NPROC; ++i){
+      if(p->state != RUNNABLE){
+        continue;
+      }
+      totalTicket += ptable.proc[i].ticket;
+    }
+    
+    // play the lottery if there is ticket
+    // using Pseudo-Random Number Generator srand()
+    // Refer https://github.com/cmcqueen/simplerandom/blob/main/c/lecuyer/lfsr113.c
+    
+    int lotteryNumber = 0;
+    if(totalTicket > 0) lotteryNumber = randnum(totalTicket);
+
+    // find and run the winner process
+    int processFound = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
+      if((lotteryNumber = lotteryNumber - p->ticket) > 0) 
+        continue;
+      processFound = 1;
+      break;
+    }
 
+    if(processFound){
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
       proc = p;
       switchuvm(p);
+      (p->tick)++;
       p->state = RUNNING;
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
@@ -281,8 +336,22 @@ scheduler(void)
       proc = 0;
     }
     release(&ptable.lock);
-
   }
+}
+
+int getpinfo(struct pstat * ps){
+  struct proc *p;
+  int i = 0;
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; ++p, ++i){
+    ps->inuse[i] = (p->state == UNUSED ? 0 : 1);
+    ps->state[i] = p->state;
+    ps->tickets[i] = p->ticket;
+    ps->pid[i] = p->pid;
+    ps->ticks[i] = p->tick;
+  }
+  release(&ptable.lock);
+  return 0;
 }
 
 // Enter scheduler.  Must hold only ptable.lock

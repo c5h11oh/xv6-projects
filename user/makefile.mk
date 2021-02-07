@@ -4,13 +4,14 @@ USER_PROGS := \
 	cat\
 	echo\
 	forktest\
+	graphplot\
 	grep\
-	hello\
 	init\
 	kill\
 	ln\
 	ls\
 	mkdir\
+	nullpointer\
 	rm\
 	sh\
 	stressfs\
