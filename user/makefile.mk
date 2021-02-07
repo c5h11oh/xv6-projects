@@ -6,9 +6,6 @@ USER_PROGS := \
 	forktest\
 	grep\
 	hello\
-	rctest\
-	test_1\
-	test_2\
 	init\
 	kill\
 	ln\
@@ -17,6 +14,8 @@ USER_PROGS := \
 	rm\
 	sh\
 	stressfs\
+	test_1\
+	test_2\
 	tester\
 	usertests\
 	wc\

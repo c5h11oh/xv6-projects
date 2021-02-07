@@ -67,16 +67,16 @@ sys_read(void)
   int n;
   char *p;
 
+  ++readCount;
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argptr(1, &p, n) < 0)
     return -1;
-  ++readCount;
   return fileread(f, p, n);
 }
 
 int
 sys_getreadcount(void)
 {
-  return readCount ;
+  return readCount;
 }
 
 int
