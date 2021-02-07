@@ -56,6 +56,30 @@ sys_sbrk(void)
 }
 
 int
+sys_mprotect(void){
+  void *addr;
+  int len;
+  if(argint(1, &len) < 0 || len <= 0)
+    return -1;
+  if(argptr(0, (char **)&addr, len*PGSIZE) < 0 || (uint)addr&0xFFF)
+    return -1;
+  
+  return mem_protect(addr, len);
+}
+
+int
+sys_munprotect(void){
+  void *addr;
+  int len;
+  if(argint(1, &len) < 0 || len <= 0)
+    return -1;
+  if(argptr(0, (char **)&addr, len*PGSIZE) < 0 || (uint)addr&0xFFF)
+    return -1;
+  
+  return mem_unprotect(addr, len);
+}
+
+int
 sys_sleep(void)
 {
   int n;

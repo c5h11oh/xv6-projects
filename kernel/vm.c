@@ -71,6 +71,37 @@ walkpgdir(pde_t *pgdir, const void *va, int create)
   return &pgtab[PTX(va)];
 }
 
+// memory protection (p3)
+int mem_protect(void* addr, int len){
+  pde_t* pgdir = proc->pgdir;
+  pte_t* pte;
+  for(int i = 0; i < len; ++i){
+    pte = walkpgdir(pgdir, addr + i*PGSIZE, 0);
+    if(!pte) return -1;
+    // cprintf("before: *pte[%d]: %x\n", i, *pte);
+    *pte &= ~2;
+    // cprintf("pte[%d]: %x\n", i, pte);
+    // cprintf("after:  *pte[%d]: %x\n", i, *pte);
+    lcr3(PADDR(proc->pgdir));
+  }
+  return 0;
+}
+
+int mem_unprotect(void* addr, int len){
+  pde_t* pgdir = proc->pgdir;
+  pte_t* pte;
+  for(int i = 0; i < len; ++i){
+    pte = walkpgdir(pgdir, addr + i*PGSIZE, 0);
+    if(!pte) return -1;
+    // cprintf("before: *pte[%d]: %x\n", i, *pte);
+    *pte |= 2;
+    // cprintf("pte[%d]: %x\n", i, pte);
+    // cprintf("after:  *pte[%d]: %x\n", i, *pte);
+    lcr3(PADDR(proc->pgdir));
+  }
+  return 0;
+}
+
 // Create PTEs for linear addresses starting at la that refer to
 // physical addresses starting at pa. la and size might not
 // be page-aligned.
@@ -306,7 +337,8 @@ copyuvm(pde_t *pgdir, uint sz)
 
   if((d = setupkvm()) == 0)
     return 0;
-  for(i = 0; i < sz; i += PGSIZE){
+  for(i = 0x1000; i < sz; i += PGSIZE){
+  // for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void*)i, 0)) == 0)
       panic("copyuvm: pte should exist");
     if(!(*pte & PTE_P))

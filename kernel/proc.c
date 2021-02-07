@@ -273,6 +273,7 @@ scheduler(void)
       proc = p;
       switchuvm(p);
       p->state = RUNNING;
+      // cprintf("Going to run: %s\n", p->name);
       swtch(&cpu->scheduler, proc->context);
       switchkvm();
 

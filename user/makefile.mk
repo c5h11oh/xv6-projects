@@ -5,13 +5,15 @@ USER_PROGS := \
 	echo\
 	forktest\
 	grep\
-	hello\
 	init\
 	kill\
 	ln\
 	ls\
 	mkdir\
+	mytest\
+	null\
 	rm\
+	segf\
 	sh\
 	stressfs\
 	tester\
@@ -74,7 +76,8 @@ USER_LDFLAGS += --omagic
 USER_LDFLAGS += --entry=main
 
 # location in memory where the program will be loaded
-USER_LDFLAGS += --section-start=.text=0x0
+USER_LDFLAGS += --section-start=.text=0x1000
+# USER_LDFLAGS += --section-start=.text=0
 
 user/bin:
 	mkdir -p user/bin
