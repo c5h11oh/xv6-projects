@@ -17,7 +17,8 @@ USER_PROGS := \
 	tester\
 	usertests\
 	wc\
-	zombie
+	zombie\
+	test
 
 USER_PROGS := $(addprefix user/, $(USER_PROGS))
 
@@ -26,7 +27,8 @@ USER_LIBS := \
 	ulib.o\
 	usys.o\
 	printf.o\
-	umalloc.o
+	umalloc.o\
+	uthreadlib.o
 
 USER_LIBS := $(addprefix user/, $(USER_LIBS))
 

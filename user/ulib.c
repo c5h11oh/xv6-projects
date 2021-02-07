@@ -103,3 +103,34 @@ memmove(void *vdst, void *vsrc, int n)
     *dst++ = *src++;
   return vdst;
 }
+
+void 
+lock_init(lock_t *l){
+  l->ticket_number = 0;
+  l->turn = 0;
+}
+
+void
+lock_acquire(lock_t *l){
+  int myTurn = 1, spinned = 0;
+  __asm__ volatile("lock; xaddl %0, %1"
+    : "+r" (myTurn), "+m" (l->ticket_number) // input + output
+    : // No input-only
+    : "memory"
+  );
+  while(l->turn != myTurn){
+    if(!spinned)
+      printf(1, "test: pid = %d: Spin.\n", getpid());  
+    spinned = 1;
+  }
+  printf(1, "test: pid = %d: Lock acquired. myTurn = %d\n", getpid(), myTurn);
+}
+
+void lock_release(lock_t *l){
+  int curTurn = 1;
+  __asm__ volatile("lock; xaddl %0, %1"
+    : "+r" (curTurn), "+m" (l->turn) // input + output
+    : // No input-only
+    : "memory"
+  );
+}

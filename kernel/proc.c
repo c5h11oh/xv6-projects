@@ -159,6 +159,57 @@ fork(void)
   return pid;
 }
 
+// Create a new thread from p.
+// Sets up stack to return as if from system call.
+// Caller must set state of returned proc to RUNNABLE.
+int
+clone(void(*fcn)(void *, void *), void *arg1, void *arg2, void *stack)
+{
+  int i, pid;
+  struct proc *np;
+
+  // Allocate process.
+  if((np = allocproc()) == 0)
+    return -1;
+
+  // Copy process state from p.
+  np->pgdir = proc->pgdir;
+  np->sz = proc->sz;
+  np->parent = proc;
+  
+  // build the stack
+  uint *sp = stack + PGSIZE;
+  *(--sp) = (uint)arg2;
+  *(--sp) = (uint)arg1;
+  *(--sp) = 0xffffffff;
+
+
+  // make a clean trapfram, except PC (eip) pointing to fcn, 
+  // and esp is the stack that has not built yet.
+  memset(np->tf, 0, sizeof(*np->tf));
+  np->tf->cs = (SEG_UCODE << 3) | DPL_USER;
+  np->tf->ds = (SEG_UDATA << 3) | DPL_USER;
+  np->tf->es = np->tf->ds;
+  np->tf->ss = np->tf->ds;
+  np->tf->eflags = FL_IF;
+  np->tf->esp = (uint)sp;
+  np->tf->eip = (uint)fcn;
+
+  // Clear %eax so that fork returns 0 in the created thread.
+  // This should be already cleared by prev. memset. Just to be sure.
+  np->tf->eax = 0;
+
+  for(i = 0; i < NOFILE; i++)
+    if(proc->ofile[i])
+      np->ofile[i] = filedup(proc->ofile[i]);
+  np->cwd = idup(proc->cwd);
+ 
+  pid = np->pid;
+  np->state = RUNNABLE;
+  safestrcpy(np->name, proc->name, sizeof(proc->name));
+  return pid;
+}
+
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.
@@ -237,6 +288,58 @@ wait(void)
     // No point waiting if we don't have any children.
     if(!havekids || proc->killed){
       release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(proc, &ptable.lock);  //DOC: wait-sleep
+  }
+}
+
+// Wait for a child process to exit and return its pid.
+// Return -1 if this process has no children.
+int
+join(void **stack)
+{
+  struct proc *p;
+  int havekids, pid;
+  void* thread_stack;
+
+  acquire(&ptable.lock);
+  for(;;){
+    thread_stack = NULL;
+
+    // Scan through table looking for zombie children.
+    havekids = 0;
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->parent != proc)
+        continue;
+      havekids = 1;
+      if(p->state == ZOMBIE){
+        // Found one.
+        pid = p->pid;
+        thread_stack = (void*) p->tf->esp;
+        thread_stack = PGROUNDDOWN(p->tf->esp);
+        kfree(p->kstack);
+        p->kstack = 0;
+        // freevm(p->pgdir);
+        p->pgdir = 0;
+        p->state = UNUSED;
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        release(&ptable.lock);
+
+        *stack = thread_stack;
+        return pid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || proc->killed){
+      release(&ptable.lock);
+      *stack = NULL;
       return -1;
     }
 
